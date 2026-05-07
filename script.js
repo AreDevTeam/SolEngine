@@ -243,23 +243,37 @@ window.warn    = msg => log(`⚠ ${String(msg)}`, "#ff9800");
 window.success = msg => log(`✓ ${String(msg)}`, "#4caf50");
 
 // ── input() via popup (mantido para compatibilidade) ─────────────────
+// ── input() via popup (Mantido para compatibilidade no Console) ──────
 window.input = async (promptMsg = "Enter value:") => {
     return new Promise(resolve => {
         log(promptMsg, "#00bcd4");
         const orig = consoleResolver;
-        consoleResolver = () => { resolve(window.prompt(promptMsg)); if (orig) orig(); };
+        // Quando o console for aberto, o prompt do navegador aparece
+        consoleResolver = () => { 
+            resolve(window.prompt(promptMsg)); 
+            if (orig) orig(); 
+        };
         switchTab('console');
     });
 };
 
-// ── terminalAsk() via terminal puro (sem popup) ──────────────────────
+// ── terminalAsk() via SOLTUX (Terminal puro, sem popups) ──────────────
 window.terminalAsk = async (question, symbol = "?") => {
-    switchTab('terminal');
+    // Agora aponta corretamente para o seu ID antigo
+    switchTab('soltux'); 
+    
     return new Promise(resolve => {
         isTerminalAsking = true;
         const line = document.createElement('div');
         line.className = 'terminal-line';
-        line.innerHTML = `<span style="color:#00ffff">${question}</span> <span style="color:#fff">${symbol} </span><span id="sol-typing" style="color:#ffeb3b">_</span>`;
+        
+        // Estilização do prompt no display
+        line.innerHTML = `
+            <span style="color:#00ffff">${question}</span> 
+            <span style="color:#fff">${symbol} </span>
+            <span id="sol-typing" style="color:#ffeb3b">_</span>
+        `;
+        
         soltuxDisplay.appendChild(line);
         soltuxDisplay.scrollTop = soltuxDisplay.scrollHeight;
 
@@ -267,22 +281,32 @@ window.terminalAsk = async (question, symbol = "?") => {
         soltuxInput.value = "";
         soltuxInput.focus();
 
+        // Handler para finalizar a entrada com Enter
         const onKey = e => {
             if (e.key !== 'Enter') return;
             e.preventDefault();
+            
             const ans = soltuxInput.value;
             soltuxInput.value = "";
+            
+            // Fixa o texto digitado na tela e remove o cursor de digitação
             area.innerText = ans;
             area.removeAttribute('id');
+            
+            // Limpa os listeners para não vazar memória
             soltuxInput.removeEventListener('keydown', onKey);
             soltuxInput.removeEventListener('input', onType);
+            
             isTerminalAsking = false;
             resolve(ans);
         };
+
+        // Efeito de "digitação em tempo real" no display do terminal
         const onType = () => {
             area.innerText = soltuxInput.value + "_";
             soltuxDisplay.scrollTop = soltuxDisplay.scrollHeight;
         };
+
         soltuxInput.addEventListener('keydown', onKey);
         soltuxInput.addEventListener('input', onType);
     });
@@ -298,12 +322,33 @@ function terminalPrint(message, color = "#fff") {
 }
 
 function switchTab(tabId) {
-    document.querySelectorAll('.tab-btn, .content').forEach(el => el.classList.remove('active'));
-    const content = document.getElementById(tabId);
-    const btn     = document.querySelector(`[onclick="switchTab('${tabId}')"]`);
-    if (content) content.classList.add('active');
-    if (btn)     btn.classList.add('active');
-    if (tabId === 'console' && consoleResolver) { consoleResolver(); consoleResolver = null; }
+    // Remove active de todos
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.content').forEach(content => content.classList.remove('active'));
+
+    // Ativa o conteúdo
+    const targetContent = document.getElementById(tabId);
+    if (targetContent) {
+        targetContent.classList.add('active');
+    }
+
+    // Ativa o botão (procurando pelo texto ou pelo onclick)
+    const targetBtn = document.querySelector(`button[onclick*="${tabId}"]`);
+    if (targetBtn) {
+        targetBtn.classList.add('active');
+    }
+
+    // Se for console e tiver algo esperando (input/wait), libera
+    if (tabId === 'console' && typeof consoleResolver === 'function') {
+        consoleResolver();
+        consoleResolver = null;
+    }
+    
+    // Foco automático no terminal
+    if (tabId === 'soltux') {
+        const input = document.getElementById('soltux-input');
+        if (input) setTimeout(() => input.focus(), 50);
+    }
 }
 
 function updateEditor() {
